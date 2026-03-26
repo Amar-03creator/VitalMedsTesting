@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const serverless = require('serverless-http');
 
 const connectDB = require('./config/database');
@@ -25,6 +26,26 @@ const app = express();
 // Security & Utility Middleware
 // =============================================
 app.use(helmet());
+
+// Global rate limiter — 100 requests per 15 minutes per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'error', message: 'Too many requests, please try again later.' },
+});
+
+// Stricter limiter for auth endpoints — 20 requests per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'error', message: 'Too many authentication attempts, please try again later.' },
+});
+
+app.use(globalLimiter);
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
@@ -56,7 +77,7 @@ app.get('/health', (req, res) => {
 // =============================================
 const API_PREFIX = '/api';
 
-app.use(`${API_PREFIX}/auth`, authRoutes);
+app.use(`${API_PREFIX}/auth`, authLimiter, authRoutes);
 app.use(`${API_PREFIX}/clients`, clientRoutes);
 app.use(`${API_PREFIX}/products`, productRoutes);
 app.use(`${API_PREFIX}/orders`, orderRoutes);

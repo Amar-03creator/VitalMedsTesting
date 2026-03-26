@@ -1,0 +1,167 @@
+service: vitalmeds-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-south-1'}
+  memorySize: 512
+  timeout: 29
+
+  environment:
+    NODE_ENV: production
+    MONGODB_URI: ${ssm:/vitalmeds/${self:provider.stage}/MONGODB_URI}
+    JWT_SECRET: ${ssm:/vitalmeds/${self:provider.stage}/JWT_SECRET}
+    JWT_EXPIRES_IN: 7d
+    AWS_REGION: ${self:provider.region}
+    S3_BUCKET_NAME: ${self:custom.s3BucketName}
+    SES_FROM_EMAIL: ${ssm:/vitalmeds/${self:provider.stage}/SES_FROM_EMAIL}
+    SES_ADMIN_EMAIL: ${ssm:/vitalmeds/${self:provider.stage}/SES_ADMIN_EMAIL}
+    COGNITO_USER_POOL_ID: ${ssm:/vitalmeds/${self:provider.stage}/COGNITO_USER_POOL_ID}
+    COGNITO_CLIENT_ID: ${ssm:/vitalmeds/${self:provider.stage}/COGNITO_CLIENT_ID}
+    FRONTEND_URL: ${ssm:/vitalmeds/${self:provider.stage}/FRONTEND_URL}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:DeleteObject
+            - s3:GetObjectAttributes
+          Resource: arn:aws:s3:::${self:custom.s3BucketName}/*
+        - Effect: Allow
+          Action:
+            - s3:ListBucket
+          Resource: arn:aws:s3:::${self:custom.s3BucketName}
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource: '*'
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource: arn:aws:ssm:${self:provider.region}:*:parameter/vitalmeds/${self:provider.stage}/*
+
+custom:
+  s3BucketName: vitalmeds-documents-${self:provider.stage}
+
+package:
+  patterns:
+    - '!node_modules/.cache/**'
+    - '!**/*.test.js'
+    - '!**/__tests__/**'
+    - '!.env*'
+    - '!README.md'
+    - '!serverless.yml'
+
+functions:
+  # Main API handler (HTTP API Gateway)
+  api:
+    handler: src/server.handler
+    description: VitalMEDS REST API
+    events:
+      # Auth
+      - httpApi:
+          path: /api/auth/{proxy+}
+          method: ANY
+      # Clients
+      - httpApi:
+          path: /api/clients
+          method: ANY
+      - httpApi:
+          path: /api/clients/{proxy+}
+          method: ANY
+      # Products
+      - httpApi:
+          path: /api/products
+          method: ANY
+      - httpApi:
+          path: /api/products/{proxy+}
+          method: ANY
+      # Orders
+      - httpApi:
+          path: /api/orders
+          method: ANY
+      - httpApi:
+          path: /api/orders/{proxy+}
+          method: ANY
+      # Invoices
+      - httpApi:
+          path: /api/invoices
+          method: ANY
+      - httpApi:
+          path: /api/invoices/{proxy+}
+          method: ANY
+      # Payments
+      - httpApi:
+          path: /api/payments
+          method: ANY
+      - httpApi:
+          path: /api/payments/{proxy+}
+          method: ANY
+      # Inquiries
+      - httpApi:
+          path: /api/inquiries
+          method: ANY
+      - httpApi:
+          path: /api/inquiries/{proxy+}
+          method: ANY
+      # Support
+      - httpApi:
+          path: /api/support
+          method: ANY
+      - httpApi:
+          path: /api/support/{proxy+}
+          method: ANY
+      # Reports / FIFO
+      - httpApi:
+          path: /api/reports
+          method: ANY
+      - httpApi:
+          path: /api/reports/{proxy+}
+          method: ANY
+      # Health check
+      - httpApi:
+          path: /health
+          method: GET
+
+  # Daily audit cron (EventBridge)
+  dailyAudit:
+    handler: src/cron/dailyAuditHandler.handler
+    description: Daily inventory audit and low-stock alerts
+    timeout: 60
+    memorySize: 256
+    events:
+      - schedule:
+          rate: cron(30 1 * * ? *)   # 7:00 AM IST = 01:30 UTC
+          enabled: true
+          name: vitalmeds-daily-audit-${self:provider.stage}
+          description: Run daily inventory audit and send alerts
+
+plugins:
+  - serverless-offline
+
+resources:
+  Resources:
+    VitalMedsDocumentsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.s3BucketName}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders: ['*']
+              AllowedMethods: [GET, PUT, POST, DELETE]
+              AllowedOrigins: ['*']
+              MaxAge: 3000
+        LifecycleConfiguration:
+          Rules:
+            - Id: DeleteTempFiles
+              Status: Enabled
+              Prefix: temp/
+              ExpirationInDays: 1

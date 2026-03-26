@@ -5,7 +5,7 @@ const auditLogSchema = new mongoose.Schema(
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Client',
-      required: true,
+      required: false,
     },
     userEmail: { type: String },
     action: {

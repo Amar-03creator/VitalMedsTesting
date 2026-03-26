@@ -53,6 +53,7 @@ const clientSchema = new mongoose.Schema(
     },
     cognitoId: { type: String, unique: true, sparse: true },
     role: { type: String, enum: ['client', 'admin'], default: 'client' },
+    password: { type: String, select: false },
     creditLimit: { type: Number, default: 0, min: 0 },
     currentBalance: { type: Number, default: 0 },
   },

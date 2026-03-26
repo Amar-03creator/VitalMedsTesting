@@ -17,10 +17,12 @@ exports.getAllClients = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.status) filter.status = req.query.status;
   if (req.query.search) {
+    // Escape special regex chars to prevent ReDoS
+    const escaped = req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     filter.$or = [
-      { name: new RegExp(req.query.search, 'i') },
-      { email: new RegExp(req.query.search, 'i') },
-      { companyName: new RegExp(req.query.search, 'i') },
+      { name: new RegExp(escaped, 'i') },
+      { email: new RegExp(escaped, 'i') },
+      { companyName: new RegExp(escaped, 'i') },
     ];
   }
 

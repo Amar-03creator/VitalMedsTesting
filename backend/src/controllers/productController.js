@@ -18,10 +18,12 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
   if (req.query.category) filter.category = req.query.category;
   if (req.query.search) {
+    // Escape special regex chars to prevent ReDoS
+    const escaped = req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     filter.$or = [
-      { name: new RegExp(req.query.search, 'i') },
-      { sku: new RegExp(req.query.search, 'i') },
-      { manufacturer: new RegExp(req.query.search, 'i') },
+      { name: new RegExp(escaped, 'i') },
+      { sku: new RegExp(escaped, 'i') },
+      { manufacturer: new RegExp(escaped, 'i') },
     ];
   }
 
